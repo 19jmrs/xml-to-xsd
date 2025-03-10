@@ -16,7 +16,49 @@ int menu(){
     return opt;
 }
 
-char* convertXML(const char* input){
+typedef struct XMLNode {
+    char *name;
+    char *value;
+    struct XMLNode **children;
+    int childCount;
+    int childCapacity;
+} XMLNode;
+
+XMLNode *initialize_node(){
+    //initiates the xmlNode and allocates memory to it
+    XMLNode *node = malloc(sizeof(XMLNode));
+    if(node == NULL){
+        printf("Memory allocation on Node initialization failed!");
+        exit(1);
+    }
+    node->name = NULL;
+    node->value = NULL;
+    node->children = NULL;
+    node->childCount = 0;
+    node->childCapacity = 0;
+
+    return node;
+}
+
+void skipWhitespace(const char* input, int* pos) {
+    // Skip whitespace in the XML input
+    while (input[*pos] != '\0' && isspace(input[*pos])) {
+        (*pos)++;
+    }
+}
+
+void skipInstruction(const char *input, int *pos){
+    //receives position of instruction start and skips it
+    while(input[*pos] != '\0' && !(input[*pos] == '?' && input[*pos + 1] == '>')){
+        (*pos)++;
+    }
+    if(input[*pos] != '\0'){
+        *pos += 2;
+    }
+}
+
+
+char *convertXML(const char* input){
     const char* head = "<xs:schema attributeFormDefault=\"unqualified\" elementFormDefault=\"qualified\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">";
     //size_t headLen = strlen(head);
     size_t inputLen = strlen(input);
