@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 int menu(){
     int opt = 0;
@@ -16,66 +17,76 @@ int menu(){
     return opt;
 }
 
-typedef struct XMLNode {
+typedef struct XmlNode {
     char *name;
-    char *value;
-    struct XMLNode **children;
-    int childCount;
-    int childCapacity;
-} XMLNode;
+    char *content;
+    struct XmlNode *child;
+    struct XmlNode *nextNode;
+} XmlNode;
 
-XMLNode *initialize_node(){
-    //initiates the xmlNode and allocates memory to it
-    XMLNode *node = malloc(sizeof(XMLNode));
-    if(node == NULL){
-        printf("Memory allocation on Node initialization failed!");
-        exit(1);
+char *skipWhiteSpace(char *s){
+    while(*s && isspace((unsigned char)*s)){
+        s++;
     }
-    node->name = NULL;
-    node->value = NULL;
-    node->children = NULL;
-    node->childCount = 0;
-    node->childCapacity = 0;
-
-    return node;
+    return s;
 }
 
-void skipWhitespace(const char* input, int* pos) {
-    // Skip whitespace in the XML input
-    while (input[*pos] != '\0' && isspace(input[*pos])) {
-        (*pos)++;
+char *parseName (char **p){
+    char *start = *p;
+    //while it's a valid character for xml name
+    while(**p && (isalnum((unsigned char) **p)) || **p == '_' || **p == ":" || **p == "." || **p == "-"){
+        (*p)++;
     }
+    //get the size of the name
+    size_t length = *p - start;
+    char *name = (char *)malloc(sizeof(length + 1));
+    if(!name){
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+
+    strncpy(name,start,length);
+    name[length] = '\0';
+    return name;
 }
 
-void skipInstruction(const char *input, int *pos){
-    //receives position of instruction start and skips it
-    while(input[*pos] != '\0' && !(input[*pos] == '?' && input[*pos + 1] == '>')){
-        (*pos)++;
-    }
-    if(input[*pos] != '\0'){
-        *pos += 2;
-    }
-}
-
-
-char *convertXML(const char* input){
-    const char* head = "<xs:schema attributeFormDefault=\"unqualified\" elementFormDefault=\"qualified\" xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">";
-    //size_t headLen = strlen(head);
-    size_t inputLen = strlen(input);
-    int sizeOutput = strlen(input) * 2;
-    char* output = malloc(sizeOutput);
-
-    if(output == NULL){
+XmlNode *parseElement(char **input){
+    *input = skipWhiteSpace(*input);
+    if(**input != '<'){
+        fprintf(stderr, "Expected '<'\n");
         return NULL;
     }
-    strcpy(output,head);
+    (*input)++;
+    if(**input == '/'){
+        return NULL;
+    }
+    XmlNode *node = (XmlNode *)malloc(sizeof(XmlNode));
+    if(!node){
+        perror("malloc");
+        exit(EXIT_FAILURE);
+    }
+    //add value to XmlNode
+    node->name = parseName(input);
+    node->child = NULL;
+    node->content = NULL;
+    node->nextNode = NULL;
 
-    for(size_t i = 0; i < inputLen; i++){
-        if(strcmp(input[i], "<")){
+    *input = skipWhiteSpace(*input);
+    int selfClosing = 0;
+    if(**input == '/'){
+        selfClosing = 1;
+        (*input)++;
+    }
+    if(**input != '>'){
+        fprintf(stderr, "Expected '>' at end of start tag for %s\n", node->name);
+    }
+    (*input)++;
 
-        }
-    }  
-    return output;
+    if(selfClosing)
+        return node;
+
+    //parse content and children until we find closing tat
+    
 }
 
 int main() {
@@ -85,9 +96,8 @@ int main() {
     int length = 0;
     char ch;
 
-    while (opt != -1) {
-        opt = menu();
-        switch (opt) {
+    opt = menu();
+    switch (opt) {
         case 1:
             // Reset variables for each new XML input
             free(str); // Free any previous allocation
@@ -102,13 +112,13 @@ int main() {
             }
             
             printf("Enter the XML (press Enter twice to finish):\n");
+            
             int emptyLine = 0;
             while (!emptyLine) {
                 char line[1024];
                 if (fgets(line, sizeof(line), stdin) == NULL) {
                     break;
                 }
-                
                 // Check for empty line (just a newline)
                 if (strcmp(line, "\n") == 0) {
                     emptyLine = 1;
@@ -116,7 +126,6 @@ int main() {
                 }
                 
                 int lineLen = strlen(line);
-                
                 // Ensure the buffer is large enough
                 if (length + lineLen >= size) {
                     size *= 2;
@@ -129,25 +138,13 @@ int main() {
                     str = temp;
                 }
                 
-                // Copy the line to the buffer
+                // appends to the end of the previous line
                 strcpy(str + length, line);
                 length += lineLen;
             }
-            
-            // Add null terminator
-            if (length > 0 && str != NULL) {
-                str[length] = '\0';
-                
-                char* output = convertXML(str);
-                if (output != NULL) {
-                    printf("Output XSD:\n%s\n", output);
-                    free(output);
-                } else {
-                    printf("Error converting XML to XSD\n");
-                }
-            } else {
-                printf("No XML input provided\n");
-            }
+            fprintf(stdout, "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n");
+            //add here rest of corp
+            fprintf(stdout, "</xs:schema>\n");
             break;
         case -1:
             printf("Leaving...\n");
@@ -156,8 +153,8 @@ int main() {
         default:
             printf("Invalid option. Please try again.\n");
             break;
-        }
     }
+    
     
     free(str); // Clean up at the end
     return 0;
