@@ -34,7 +34,7 @@ char *skipWhiteSpace(char *s){
 char *parseName (char **p){
     char *start = *p;
     //while it's a valid character for xml name
-    while(**p && (isalnum((unsigned char) **p)) || **p == '_' || **p == ":" || **p == "." || **p == "-"){
+    while((**p && (isalnum((unsigned char) **p))) || **p == '_' || **p == ":" || **p == "." || **p == "-"){
         (*p)++;
     }
     //get the size of the name
@@ -44,7 +44,7 @@ char *parseName (char **p){
         perror("malloc");
         exit(EXIT_FAILURE);
     }
-
+   
     strncpy(name,start,length);
     name[length] = '\0';
     return name;
@@ -85,8 +85,89 @@ XmlNode *parseElement(char **input){
     if(selfClosing)
         return node;
 
-    //parse content and children until we find closing tat
+    XmlNode *childHead = NULL, *childTail = NULL;
+    while(1){
+        *input = skipWhiteSpace(*input);
+        if(**input == '<'){
+            if((*input)[1] == '/'){
+                break;
+            }
+            else{
+                XmlNode *child = parseElement(input);       
+                if(child){
+                    if(!childHead){
+                        childHead = childTail = child;
+                    } else{
+                        childTail->nextNode = child;
+                        childTail = child;
+                    }
+                }
+            }
+        } else{
+            char *textStart = *input;
+            while(**input && **input != '<'){
+                (*input)++;
+            }
+            size_t len = *input - textStart;
+            char *text = (char *)malloc(len + 1);
+            if(!text){
+                perror("malloc");
+                exit(EXIT_FAILURE);
+            }
+            strncpy(text, textStart, len);
+            text[len] = '\0';
+
+            int onlyWhiteSpace = 1;
+            for(size_t i = 0; i < len; i++){
+                if(!isspace((unsigned char)text[i])){
+                    onlyWhiteSpace = 0;
+                    break;
+                }
+            }
+            if(!onlyWhiteSpace){
+                if(node->content == NULL){
+                    node->content = text;
+                } else{
+                    char *newContent = (char *)malloc(strlen(node->content) + strlen(text) + 1);
+                    if(!newContent){
+                        perror("malloc");
+                        exit(EXIT_FAILURE);
+                    }
+                    strcpy(newContent, node->content);
+                    strcat(newContent, text);
+                    free(node->content);
+                    node->content = newContent;
+                    free(text);
+                }
+            } else {
+                free(text);
+            }
+        }
+        *input = skipWhiteSpace(*input);
+        if(**input == '<' && (*input)[1] == '/'){
+            break;
+        }
+    }
+    if(**input != '<' || (*input)[1] != '/'){
+        fprintf(stderr, "Expected closing tag for %s\n", node->name);
+    } else {
+        (*input) += 2;
+        char *closingName = parseName(input);
+        if(strcmp(closingName, node->name) != 0){
+            fprintf(stderr, "Mismatched closing tag: expected %s, got %s\n", node->name, closingName);
+        }
+        free(closingName);
+        *input = skipWhiteSpace(*input);
+        if(**input == '>'){
+            (*input)++;
+        } else{
+            fprintf(stderr, "Expected '>' at end of closign tag for %s\n", node->name);
+        }
+    }
+    node->child = childHead;
+    return node;
     
+
 }
 
 int main() {
@@ -144,6 +225,9 @@ int main() {
             }
             fprintf(stdout, "<xs:schema xmlns:xs=\"http://www.w3.org/2001/XMLSchema\">\n");
             //add here rest of corp
+            XmlNode *root = parseElement(&str);
+            fprintf(stdout, "\n Element: %s", root->name);
+            fprintf(stdout, "\n Child: %s", root->child->name);
             fprintf(stdout, "</xs:schema>\n");
             break;
         case -1:
